@@ -1,8 +1,8 @@
 import rand
 import clipboard
-import json
 import term
 import os { get_line, input }
+import encoding.hex as enc
 
 const (
 	nothing = '  '
@@ -194,19 +194,30 @@ fn (mut g Game) show_gens() {
 		}
 		'c' {
 			mut c := clipboard.new()
-			if c.copy(json.encode(g.gens)) {
+			mut data := []u8{cap: g.genc * 4}
+			for gen in g.gens {
+				data << gen.up
+				data << gen.down
+				data << gen.left
+				data << gen.right
+			}
+			if c.copy(enc.encode(data)) {
 				println('скопированно')
 			}
 			c.destroy()
 		}
 		'v' {
 			mut c := clipboard.new()
-			chain := json.decode([]Gen, c.paste()) or { [] }
-			if chain.len == 0 || chain.len > 30 {
+			data := enc.decode(c.paste()) or { [] }
+			if data.len == 0 || data.len > 30 * 4 || data.len % 4 != 0 {
 				println('не удалось загрузить')
 				get_line()
 			} else {
-				g.genc = chain.len
+				g.genc = data.len/4
+				mut chain := []Gen{cap: g.genc}
+				for i in 0..g.genc {
+					chain << Gen{data[4*i],data[4*i+1],data[4*i+2],data[4*i+3]}
+				}
 				g.gens = chain
 				g.show_gens()
 			}
@@ -217,10 +228,10 @@ fn (mut g Game) show_gens() {
 }
 
 struct Gen {
-	up    u8 [json: u]
-	down  u8 [json: d]
-	left  u8 [json: l]
-	right u8 [json: r]
+	up    u8
+	down  u8
+	left  u8
+	right u8
 }
 
 fn new_game() Game {
