@@ -3,6 +3,7 @@ import clipboard
 import term
 import os { get_line, input }
 import encoding.hex as enc
+import strings
 
 const (
 	nothing = '  '
@@ -31,7 +32,19 @@ fn main() {
 				game.display()
 			}
 			'' {
+				if game.end {
+					term.clear_previous_line()
+					continue
+				}
 				game.step()
+				game.display()
+			}
+			'e' {
+				if game.end {
+					term.clear_previous_line()
+					continue 
+				}
+				game.step_to_end()
 				game.display()
 			}
 			else {
@@ -43,35 +56,45 @@ fn main() {
 
 fn (g Game) display() {
 	term.clear()
-	print('┌')
+	mut b := strings.new_builder(1)
+	b.write_string('┌')
 	for _ in 0 .. g.size {
-		print('──')
+		b.write_string('──')
 	}
-	println('┐')
+	b.writeln('┐')
 	for x in 0 .. g.size {
-		print('│')
+		b.write_string('│')
 		for y in 0 .. g.size {
 			match g.world[x][y] {
-				30 { print(nothing) }
-				31 { print(block) }
-				else { print('${g.world[x][y]:02}') }
+				30 { b.write_string(nothing) }
+				31 { b.write_string(block) }
+				else { b.write_string('${g.world[x][y]:02}') }
 			}
 		}
-		print('│')
-		println('')
+		b.write_string('│')
+		b.writeln('')
 	}
-	print('└')
+	b.write_string('└')
 	for _ in 0 .. g.size {
-		print('──')
+		b.write_string('──')
 	}
-	print('┘')
-	println('')
-	println('r для перезапуска, R для полного перезапуска,')
-	println('w для перезапуска мира')
-	println('v для просмотра цепи генов, enter для шага')
+	b.write_string('┘')
+	b.writeln('')
+	b.writeln('r для перезапуска, R для полного перезапуска,')
+	b.writeln('w для перезапуска мира, e для щага до конца')
+	b.writeln('v для просмотра цепи генов, enter для шага')
+	print(b.str())
+}
+
+fn (mut g Game) step_to_end() {
+	for {
+		if g.end { return }
+		g.step()
+	}
 }
 
 fn (mut g Game) step() {
+	mut end_c := true
 	mut temp_w := g.world.clone()
 	for x in 0 .. g.size {
 		for y in 0 .. g.size {
@@ -90,10 +113,12 @@ fn (mut g Game) step() {
 					temp_w[x + 1][y] = g.gens[g.world[x][y]].down
 				}
 				temp_w[x][y] = 31
+				end_c = false
 			}
 		}
 	}
 	g.world = temp_w
+	g.end = end_c
 }
 
 struct Game {
@@ -102,6 +127,7 @@ mut:
 	size  int
 	gens  []Gen
 	world [][]u8
+	end   bool
 }
 
 fn (mut g Game) show_gens() {
@@ -213,10 +239,10 @@ fn (mut g Game) show_gens() {
 				println('не удалось загрузить')
 				get_line()
 			} else {
-				g.genc = data.len/4
+				g.genc = data.len / 4
 				mut chain := []Gen{cap: g.genc}
-				for i in 0..g.genc {
-					chain << Gen{data[4*i],data[4*i+1],data[4*i+2],data[4*i+3]}
+				for i in 0 .. g.genc {
+					chain << Gen{data[4 * i], data[4 * i + 1], data[4 * i + 2], data[4 * i + 3]}
 				}
 				g.gens = chain
 				g.show_gens()
@@ -238,7 +264,7 @@ fn new_game() Game {
 	mut size := 0
 	mut genc := 0
 	term.clear()
-	for size <= 0 {
+	for size <= 0 || size >= 101 {
 		term.clear_previous_line()
 		size = input('размер поля: ').int()
 	}
@@ -249,7 +275,7 @@ fn new_game() Game {
 	}
 	mut world := [][]u8{len: size, init: []u8{len: size, init: 30}}
 	world[size / 2][size / 2] = 0
-	return Game{genc, size, new_gens(genc), world}
+	return Game{genc, size, new_gens(genc), world, false}
 }
 
 fn (mut g Game) reset_game() {
@@ -257,12 +283,14 @@ fn (mut g Game) reset_game() {
 	world[g.size / 2][g.size / 2] = 0
 	g.world = world
 	g.gens = new_gens(g.genc)
+	g.end = false
 }
 
 fn (mut g Game) reset_world() {
 	mut world := [][]u8{len: g.size, init: []u8{len: g.size, init: 30}}
 	world[g.size / 2][g.size / 2] = 0
 	g.world = world
+	g.end = false
 }
 
 fn new_gens(genc int) []Gen {
